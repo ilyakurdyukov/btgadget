@@ -241,63 +241,123 @@ static int bt_get_type_range(btio_t *io, int value, int *end) {
 	return start;
 }
 
-// 08  19 00  20 00  03 28
-// 09 07  1a 00 06 1b 00 01 2d  1d 00 12 1e 00 00 2d
+enum { ENUM_PRIMARY, ENUM_CHARS, ENUM_CHAR_DESC };
+
+static int enum_handles(btio_t *io, int start, int end, int mode,
+		int (*cb)(void*, const uint8_t*, int), void *data) {
+	int i, j, len, n;
+	while (start <= end) {
+		if (mode == ENUM_PRIMARY) {
+			io->buf[0] = 0x10; // Read By Group Type Request
+			WRITE16_LE(io->buf + 1, start);
+			WRITE16_LE(io->buf + 3, end);
+			WRITE16_LE(io->buf + 5, 0x2800);
+			n = 7;
+		} else if (mode == ENUM_CHARS) {
+			io->buf[0] = 0x08; // Read By Type Request
+			WRITE16_LE(io->buf + 1, start);
+			WRITE16_LE(io->buf + 3, end);
+			WRITE16_LE(io->buf + 5, 0x2803);
+			n = 7;
+		} else if (mode == ENUM_CHAR_DESC) {
+			io->buf[0] = 0x04; // Find Information Request
+			WRITE16_LE(io->buf + 1, start);
+			WRITE16_LE(io->buf + 3, end);
+			n = 5;
+		} else break;
+		j = io->buf[0];
+		bt_send(io, NULL, n);
+		len = bt_recv(io);
+		if (len <= 2) {
+			DBG_LOG("unexpected length\n");
+			break;
+		}
+		if (io->buf[0] == 0x01) {
+			if (len != 5 || io->buf[1] != j || READ16_LE(io->buf + 2) != start || io->buf[4] != 0x0a)
+				DBG_LOG("unexpected error response\n");
+			else start = end + 1;
+			break;
+		}
+		if (io->buf[0] != j + 1) {
+			DBG_LOG("unexpected opcode (0x%02x)\n", io->buf[0]);
+			break;
+		}
+		n = io->buf[1]; j = 0;
+		if (mode == ENUM_PRIMARY) {
+			if (n == 4 + 2 || n == 4 + 16) j = 4;
+		} else if (mode == ENUM_CHARS) {
+			if (n == 5 + 2 || n == 5 + 16) j = 5;
+		} else if (mode == ENUM_CHAR_DESC) {
+			if (n == 1) j = 2, n = 2 + 2;
+			else if (n == 2) j = 2, n = 2 + 16;
+		}
+		if (!j) {
+			DBG_LOG("unexpected type (%u)\n", n);
+			break;
+		}
+		if ((len - 2) % n) {
+			DBG_LOG("unexpected remainder\n");
+			break;
+		}
+		for (i = 2; i < len; i += n) {
+			int h = READ16_LE(io->buf + i);
+			if (h < start || h > end) {
+				DBG_LOG("handle out of range\n");
+				return 1;
+			}
+			start = h + 1;
+			j = cb(data, io->buf + i, n);
+			if (j) return j;
+		}
+	}
+	return start <= end;
+}
+
+struct bt_find_char_data {
+	int len; const int *uuid; int *dest;
+};
+
+static int bt_find_char_cb(void *data, const uint8_t *buf, int n) {
+	struct bt_find_char_data *x = data;
+	if (n != 7) return 0;
+	int k, j, len = x->len;
+	const int *uuid = x->uuid;
+	int *dest = x->dest;
+	int a = READ16_LE(buf + 5);
+	for (k = j = 0; j < len; j++) {
+		if (dest[j] == -1 && uuid[j] == a)
+			dest[j] = READ16_LE(buf + 3);
+		k += dest[j] != -1;
+	}
+	return k == len ? 2 : 0;
+}
 
 static int bt_find_char(btio_t *io, int start, int end,
 		int n, const int *uuid, int *dest) {
-	int i, j, k, len, ret;
-	memset(dest, -1, n * sizeof(int));
-	while (start <= end) {
-		io->buf[0] = 0x08;
-		WRITE16_LE(io->buf + 1, start);
-		WRITE16_LE(io->buf + 3, end);
-		WRITE16_LE(io->buf + 5, 0x2803);
-		bt_send(io, NULL, 7);
-		len = bt_recv(io);
-		if (len < 2 + 7) break;
-		if (io->buf[0] != 0x09) break;
-		if (io->buf[1] != 0x07) break;
-		if ((len - 2) % 7) break;
-		for (i = 2; i < len; i += 7) {
-			int h = READ16_LE(io->buf + i);
-			int a = READ16_LE(io->buf + i + 5);
-			if (h < start || h > end) return -1;
-			start = h + 1;
-			for (k = j = 0; j < n; j++) {
-				if (dest[j] == -1 && uuid[j] == a) {
-					dest[j] = READ16_LE(io->buf + i + 3);
-				}
-				k += dest[j] != -1;
-			}
-			if (k == n) return k;
-		}
-	}
-	for (k = i = 0; i < n; i++)
-		k += dest[i] != -1;
+	int i, k;
+	struct bt_find_char_data data = { n, uuid, dest };
+	memset(dest, -1, n * sizeof(*dest));
+	i = enum_handles(io, start, end, ENUM_CHARS,
+			&bt_find_char_cb, &data);
+	if (i == 2) return n;
+	for (k = i = 0; i < n; i++) k += dest[i] != -1;
 	return k;
 }
 
-static int bt_find_char_desc(btio_t *io, int start, int end, int value) {
-	int i, len;
-	while (start <= end) {
-		io->buf[0] = 0x04;
-		WRITE16_LE(io->buf + 1, start);
-		WRITE16_LE(io->buf + 3, end);
-		bt_send(io, NULL, 5);
-		len = bt_recv(io);
-		if (len < 2 + 4) break;
-		if (io->buf[0] != 0x05) break;
-		if (io->buf[1] != 0x01) break;
-		if ((len - 2) & 3) break;
-		for (i = 2; i < len; i += 4) {
-			int h = READ16_LE(io->buf + i);
-			int a = READ16_LE(io->buf + i + 2);
-			if (h < start || h > end) return -1;
-			start = h + 1;
-			if (a == value) return h;
-		}
+static int bt_find_char_desc_cb(void *data, const uint8_t *buf, int n) {
+	int *x = data;
+	if (n == 4 && *x == READ16_LE(buf + 2)) {
+		*x = READ16_LE(buf);
+		return 2;
 	}
+	return 0;
+}
+
+static int bt_find_char_desc(btio_t *io, int start, int end, int value) {
+	int i, data = value;
+	i = enum_handles(io, start, end, ENUM_CHAR_DESC,
+			&bt_find_char_desc_cb, &data);
+	if (i == 2) return data;
 	return -1;
 }
 
@@ -332,6 +392,38 @@ static int bt_recv_more(btio_t *io, int pos, int n) {
 	return n;
 }
 
+static int list_handles_cb(void *data, const uint8_t *buf, int n) {
+	int j, mode = (uintptr_t)data;
+	int h = READ16_LE(buf);
+	if (mode == ENUM_PRIMARY) {
+		DBG_LOG("0x%04x: end = 0x%04x, uuid = ",
+				h, READ16_LE(buf + 2));
+		j = 4;
+	} else if (mode == ENUM_CHARS) {
+		DBG_LOG("0x%04x: prop = 0x%02x, val = 0x%04x, uuid = ",
+				h, buf[2], READ16_LE(buf + 3));
+		j = 5;
+	} else if (mode == ENUM_CHAR_DESC) {
+		DBG_LOG("0x%04x: uuid = ", h);
+		j = 2;
+	} else return -1;
+	buf += j;
+	if (n == j + 2)
+		DBG_LOG("%08x-0000-1000-8000-00805f9b34fb\n",
+				READ16_LE(buf));
+	else
+		DBG_LOG("%08x-%02x-%02x-%02x-%02x%04x\n",
+				READ32_LE(buf + 12), READ16_LE(buf + 10),
+				READ16_LE(buf + 8), READ16_LE(buf + 6),
+				READ16_LE(buf + 4), READ32_LE(buf));
+	return 0;
+}
+
+static inline void list_handles(btio_t *io, int mode) {
+	enum_handles(io, 1, 0xffff, mode,
+			&list_handles_cb, (void*)(intptr_t)mode);
+}
+
 #include "tjd.h"
 #include "moyoung.h"
 #include "atorch.h"
@@ -357,6 +449,8 @@ int main(int argc, char **argv) {
 	const char *src_str = "00:00:00:00:00:00"; // BDADDR_ANY
 	const char *dst_str = NULL;
 	bdaddr_t sba, dba;
+	int stype = BDADDR_LE_PUBLIC;
+	int dtype = BDADDR_LE_PUBLIC;
 	int sock, ret;
 	btio_t io_buf, *io = &io_buf;
 	int verbose = 0;
@@ -369,6 +463,14 @@ int main(int argc, char **argv) {
 		} else if (!strcmp(argv[1], "--dst")) {
 			if (argc <= 2) ERR_EXIT("bad option\n");
 			dst_str = argv[2];
+			argc -= 2; argv += 2;
+		} else if (!strcmp(argv[1], "--stype")) {
+			if (argc <= 2) ERR_EXIT("bad option\n");
+			stype = atoi(argv[2]);
+			argc -= 2; argv += 2;
+		} else if (!strcmp(argv[1], "--dtype")) {
+			if (argc <= 2) ERR_EXIT("bad option\n");
+			dtype = atoi(argv[2]);
 			argc -= 2; argv += 2;
 		} else if (!strcmp(argv[1], "--verbose")) {
 			if (argc <= 2) ERR_EXIT("bad option\n");
@@ -387,9 +489,9 @@ int main(int argc, char **argv) {
 
 	sock = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
 	if (sock < 0) PERROR_EXIT(socket);
-	ret = l2cap_bind(sock, &sba, BDADDR_LE_PUBLIC, 0, ATT_CID);
+	ret = l2cap_bind(sock, &sba, stype, 0, ATT_CID);
 	if (ret) PERROR_EXIT(bind);
-	ret = l2cap_connect(sock, &dba, BDADDR_LE_PUBLIC, 0, ATT_CID);
+	ret = l2cap_connect(sock, &dba, dtype, 0, ATT_CID);
 	if (ret) PERROR_EXIT(connect);
 
 	io->sock = sock;
@@ -401,6 +503,18 @@ int main(int argc, char **argv) {
 			if (argc <= 2) ERR_EXIT("bad command\n");
 			io->verbose = atoi(argv[2]);
 			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "primary")) {
+			list_handles(io, ENUM_PRIMARY);
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "chars")) {
+			list_handles(io, ENUM_CHARS);
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "char_desc")) {
+			list_handles(io, ENUM_CHAR_DESC);
+			argc -= 1; argv += 1;
 
 		} else if (!strcmp(argv[1], "tjd")) {
 			argc -= 1; argv += 1;

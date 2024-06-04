@@ -12,11 +12,17 @@ Just a personal tool for experiments. May be useful as example code.
 
 #### Options
 
+- `--src`: source (host) address  
 - `--dst`: destination (gadget) address  
+- `--stype N`: source type (1 = public, 2 = random)  
+- `--dtype N`: destination type (1 = public, 2 = random)  
 - `--verbose N`: verbosity level  
 
 #### Commands
 
+- `primary`: primary service discovery  
+- `chars`: characteristics discovery  
+- `char_desc`: characteristics descriptor discovery  
 - `tjd`: switch to TJD mode (fitness bracelets)  
 - `moyoung`: switch to Moyoung mode (smart watches)  
 - `atorch`: display data from Atorch USB tester  
