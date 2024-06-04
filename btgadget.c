@@ -392,8 +392,11 @@ static int bt_recv_more(btio_t *io, int pos, int n) {
 	return n;
 }
 
+#include "uuid_info.h"
+
 static int list_handles_cb(void *data, const uint8_t *buf, int n) {
-	int j, mode = (uintptr_t)data;
+	int j, mode = (uintptr_t)data & 0xffff;
+	int verbose = (uintptr_t)data >> 16;
 	int h = READ16_LE(buf);
 	if (mode == ENUM_PRIMARY) {
 		DBG_LOG("0x%04x: end = 0x%04x, uuid = ",
@@ -416,12 +419,21 @@ static int list_handles_cb(void *data, const uint8_t *buf, int n) {
 				READ32_LE(buf + 12), READ16_LE(buf + 10),
 				READ16_LE(buf + 8), READ16_LE(buf + 6),
 				READ16_LE(buf + 4), READ32_LE(buf));
+
+	if (verbose >= 1 && n == j + 2) {
+		int i, uuid = READ16_LE(buf);
+		for (i = 0; gatt_uuid_info[i].info; i++)
+			if (gatt_uuid_info[i].uuid == uuid) {
+				DBG_LOG("info: %s\n", gatt_uuid_info[i].info);
+				break;
+			}
+	}
 	return 0;
 }
 
 static inline void list_handles(btio_t *io, int mode) {
 	enum_handles(io, 1, 0xffff, mode,
-			&list_handles_cb, (void*)(intptr_t)mode);
+			&list_handles_cb, (void*)(intptr_t)(mode | io->verbose << 16));
 }
 
 #include "tjd.h"
