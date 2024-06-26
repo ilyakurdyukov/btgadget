@@ -34,13 +34,14 @@ static void tjd_cmd(btio_t *io, const uint8_t *src, unsigned len, int flags) {
 
 static int tjd_recv(btio_t *io) {
 	int len = bt_recv(io);
-	if (!len) ERR_EXIT("no response\n");
+	if (!len) return 0;
 	if (io->buf[0] != 0x1b || len < 6)
 		ERR_EXIT("unexpected response\n");
 	if (READ16_LE(io->buf + 1) != tjd_handle[1]) 
 		ERR_EXIT("unexpected handle\n");
 	len -= 3;
 	if (io->buf[3] != 0x5a) ERR_EXIT("wrong magic\n");
+	while (io->buf[4] < len && !io->buf[3 + len - 1]) len--;
 	if (io->buf[4] != len) ERR_EXIT("wrong length\n");
 	if (io->buf[3 + len - 1] != tjd_crc8(io->buf + 3, len - 1)) 
 		ERR_EXIT("wrong checksum\n");
@@ -56,7 +57,9 @@ static int tjd_recv_timer(btio_t *io, int timeout) {
 	return len;
 }
 
-static void tjd_dialpush(btio_t *io, const char *fn) {
+static int tjd_pushwait = 10;
+
+static void tjd_push(btio_t *io, const char *fn, int type) {
 	uint8_t cmd[20];
 	uint8_t *mem; size_t size = 0;
 	int i, n, len;
@@ -64,16 +67,16 @@ static void tjd_dialpush(btio_t *io, const char *fn) {
 	mem = loadfile(fn, &size, 0xffff0);
 	if (!mem) ERR_EXIT("loadfile failed\n");
 	n = (size + 15) >> 4;
-	cmd[0] = 0x28;
+	cmd[0] = type;
 	WRITE16_BE(cmd + 1, n);
 	cmd[3] = 1;
 	tjd_cmd(io, cmd, 4, 3);
 	/* very slow response, ~6 sec */
 	len = tjd_recv_timer(io, 10000);
-	if (len != 5 || memcmp(io->buf + 5, "\x28\x01", 2))
-		ERR_EXIT("dialpush failed\n");
+	if (len != 5 || io->buf[5] != type || io->buf[6] != 1)
+		ERR_EXIT("push failed\n");
 
-	cmd[1] = 0x29;
+	cmd[1] = type + 1;
 	for (i = 0; i < n; i++) {
 		int nn = size - i * 16;
 		if (nn >= 16) nn = 16;
@@ -81,7 +84,7 @@ static void tjd_dialpush(btio_t *io, const char *fn) {
 		memcpy(cmd + 4, mem + i * 16, nn);
 		WRITE16_BE(cmd + 2, i);
 		tjd_cmd(io, cmd + 1, 19, 0);
-		usleep(10 * 1000); /* take it slow */
+		usleep(tjd_pushwait * 1000); /* take it slow */
 	}
 	free(mem);
 }
@@ -116,6 +119,7 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 		} else if (!strcmp(argv[1], "info")) {
 			static const uint8_t cmd1[] = { 0x00 };
 			static const uint8_t cmd2[] = { 0x39,0x00 };
+			static const uint8_t cmd3[] = { 0x45 };
 			int len;
 			tjd_cmd(io, cmd1, sizeof(cmd1), 3);
 			len = tjd_recv(io);
@@ -139,6 +143,12 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 				DBG_LOG("Size = %u\n", READ16_BE(io->buf + 11));
 				DBG_LOG("\n");
 			}
+			// don't have devices that respond to this
+			if (0) {
+				tjd_cmd(io, cmd3, sizeof(cmd3), 3);
+				len = tjd_recv(io);
+			}
+			// If both 0x39 and 0x45 don't work, then the size is probably 80x160.
 			argc -= 1; argv += 1;
 
 		} else if (!strcmp(argv[1], "batlevel")) {
@@ -174,8 +184,40 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "dialpush")) {
 			if (argc <= 2) ERR_EXIT("bad command\n");
-			tjd_dialpush(io, argv[2]);
+			tjd_push(io, argv[2], 0x28);
 			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "wallpush")) {
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			// rgb565 BE
+			tjd_push(io, argv[2], 0x2b);
+			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "dialinfoget")) {
+			uint8_t cmd[] = { 0x2e,0x00 };
+			int len;
+			tjd_cmd(io, cmd, sizeof(cmd), 3);
+			len = tjd_recv(io);
+			if (len == 11 && io->buf[5] == 0x2e && io->buf[6] == 0x00) {
+				DBG_LOG("DialInfoGet:\n");
+				DBG_LOG("TimePosition = %u\n", io->buf[7]); // 0 = top, 1 = bottom
+				DBG_LOG("TimeTop = %u\n", io->buf[8]);
+				DBG_LOG("TimeBottom = %u\n", io->buf[9]);
+				DBG_LOG("ContentColor = %u\n", io->buf[10]); // 0..8
+				DBG_LOG("DialSelect = %u\n", io->buf[11]);
+				DBG_LOG("DefaultBG = %u\n", io->buf[12]);
+			}
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "dialinfoset")) {
+			uint8_t cmd[] = { 0x2e,0x01, 0,0,0,0,0,0 };
+			int i, len;
+			if (argc <= 7) ERR_EXIT("bad command\n");
+			for (i = 0; i < 6; i++)
+				cmd[2 + i] = strtol(argv[2 + i], NULL, 0);
+			tjd_cmd(io, cmd, sizeof(cmd), 3);
+			len = tjd_recv(io);
+			argc -= 7; argv += 7;
 
 		} else if (!strcmp(argv[1], "setlanguage")) {
 			uint8_t cmd[] = { 0x21,0x00 };
@@ -248,6 +290,11 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 		} else if (!strcmp(argv[1], "timeout")) {
 			if (argc <= 2) ERR_EXIT("bad command\n");
 			io->timeout = atoi(argv[2]);
+			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "pushwait")) {
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			tjd_pushwait = atoi(argv[2]);
 			argc -= 2; argv += 2;
 
 		} else {
