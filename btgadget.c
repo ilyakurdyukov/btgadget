@@ -30,6 +30,7 @@
 #if 1
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/l2cap.h>
+#include <bluetooth/rfcomm.h>
 #else
 #include "bt_mini.h"
 #endif
@@ -107,6 +108,19 @@ static int l2cap_connect(int sock, const bdaddr_t *bdaddr,
 }
 #undef L2CAP_ADDR
 
+static int rfcomm_connect(int sock, const bdaddr_t *bdaddr,
+		int channel) {
+	int err;
+	struct sockaddr_rc addr = { 0 };
+	addr.rc_family = AF_BLUETOOTH;
+	memcpy(&addr.rc_bdaddr, bdaddr, sizeof(bdaddr_t));
+	addr.rc_channel = channel;
+	err = connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+	if (err < 0 && errno != EAGAIN && errno != EINPROGRESS)
+		return -errno;
+	return 0;
+}
+
 #define PERROR_EXIT(name) do { perror(#name " failed"); exit(1); } while (0)
 
 #define ERR_EXIT(...) \
@@ -162,7 +176,7 @@ static int l2cap_connect(int sock, const bdaddr_t *bdaddr,
 #define IO_BUFSIZE 256
 
 typedef struct {
-	int sock, verbose, timeout;
+	int sock, verbose, timeout, type;
 	uint8_t buf[IO_BUFSIZE];
 } btio_t;
 
@@ -186,6 +200,7 @@ loop:
 		DBG_LOG("recv (%d):\n", len);
 		print_mem(stderr, io->buf, len);
 	}
+	if (io->type != 0) return len;
 	// handle Exchange MTU Request
 	if (len == 3 && io->buf[0] == 0x02) {
 		// send Error Response
@@ -436,9 +451,26 @@ static inline void list_handles(btio_t *io, int mode) {
 			&list_handles_cb, (void*)(intptr_t)(mode | io->verbose << 16));
 }
 
+static int pnm_next(FILE *f) {
+	int n = -1;
+	for (;;) {
+		int a = fgetc(f);
+		if (a == '#') do a = fgetc(f); while (a != '\n' && a != '\r' && a != EOF);
+		if ((unsigned)a - '0' < 10) {
+			if (n < 0) n = 0;
+			if ((n = n * 10 + a - '0') >= 1 << 16) break;
+		} else if (a == ' ' || a == '\n' || a == '\r' || a == '\t') {
+			if (n >= 0) return n;
+		} else if (a == EOF) return n;
+		else break;
+	}
+	return -1;
+}
+
 #include "tjd.h"
 #include "moyoung.h"
 #include "atorch.h"
+#include "yhk_print.h"
 
 static int ch2hex(unsigned a) {
 	const char *tab = "abcdef0123456789ABCDEF";
@@ -463,7 +495,7 @@ int main(int argc, char **argv) {
 	bdaddr_t sba, dba;
 	int stype = BDADDR_LE_PUBLIC;
 	int dtype = BDADDR_LE_PUBLIC;
-	int sock, ret;
+	int ret;
 	btio_t io_buf, *io = &io_buf;
 	int verbose = 0;
 
@@ -499,16 +531,27 @@ int main(int argc, char **argv) {
 	if (str2bdaddr(dst_str, &dba))
 		ERR_EXIT("malformed dst addr\n");
 
-	sock = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-	if (sock < 0) PERROR_EXIT(socket);
-	ret = l2cap_bind(sock, &sba, stype, 0, ATT_CID);
-	if (ret) PERROR_EXIT(bind);
-	ret = l2cap_connect(sock, &dba, dtype, 0, ATT_CID);
-	if (ret) PERROR_EXIT(connect);
-
-	io->sock = sock;
 	io->timeout = 1000;
 	io->verbose = verbose;
+
+	if (argc > 1 && !strcmp(argv[1], "yhk_print")) {
+		argc -= 1; argv += 1;
+		io->type = 2;
+		io->sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+		if (io->sock < 0) PERROR_EXIT(socket);
+		ret = rfcomm_connect(io->sock, &dba, 2);
+		if (ret) PERROR_EXIT(connect);
+		yhk_print_main(io, argc, argv);
+		goto end;
+	}
+
+	io->type = 0;
+	io->sock = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+	if (io->sock < 0) PERROR_EXIT(socket);
+	ret = l2cap_bind(io->sock, &sba, stype, 0, ATT_CID);
+	if (ret) PERROR_EXIT(bind);
+	ret = l2cap_connect(io->sock, &dba, dtype, 0, ATT_CID);
+	if (ret) PERROR_EXIT(connect);
 
 	while (argc > 1) {
 		if (!strcmp(argv[1], "verbose")) {
@@ -566,6 +609,7 @@ int main(int argc, char **argv) {
 			ERR_EXIT("unknown command\n");
 		}
 	}
-	close(sock);
+end:
+	close(io->sock);
 }
 

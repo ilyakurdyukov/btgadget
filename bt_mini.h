@@ -6,6 +6,7 @@
 #endif
 
 #define BTPROTO_L2CAP	0
+#define BTPROTO_RFCOMM	3
 
 /* BD Address */
 typedef struct {
@@ -42,6 +43,13 @@ struct sockaddr_l2 {
 	bdaddr_t	l2_bdaddr;
 	unsigned short	l2_cid;
 	uint8_t		l2_bdaddr_type;
+};
+
+/* RFCOMM socket address */
+struct sockaddr_rc {
+	sa_family_t	rc_family;
+	bdaddr_t	rc_bdaddr;
+	uint8_t		rc_channel;
 };
 
 #endif

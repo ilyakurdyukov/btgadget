@@ -126,11 +126,11 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 			if (len == 0x14 && io->buf[5] == 0x00) {
 				DBG_LOG("DevInfo:\n");
 				DBG_LOG("Support = 0x%04x\n", READ16_LE(io->buf + 6));
-				DBG_LOG("DevTypeReserve = \"%04x\"\n", READ16_BE(io->buf + 8));
-				DBG_LOG("Type = \"%08x\"\n", READ32_BE(io->buf + 10));
+				DBG_LOG("DevTypeReserve = %04X\n", READ16_BE(io->buf + 8));
+				DBG_LOG("Type = %08X\n", READ32_BE(io->buf + 10));
 				DBG_LOG("HWVer = %u.%u\n", io->buf[14], io->buf[15]);
 				DBG_LOG("SWVer = %u.%u\n", io->buf[16], io->buf[17]);
-				DBG_LOG("Vendor = \"%08x\"\n", READ32_BE(io->buf + 18));
+				DBG_LOG("Vendor = %08X\n", READ32_BE(io->buf + 18));
 				DBG_LOG("\n");
 			}
 			tjd_cmd(io, cmd2, sizeof(cmd2), 3);

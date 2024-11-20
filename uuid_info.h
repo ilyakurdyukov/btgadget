@@ -1,8 +1,11 @@
 
-struct {
+static const struct {
 	int uuid; const char *info;
 } gatt_uuid_info[] = {
 #define X(uuid, info) { uuid, info },
+
+/* protocols */
+X(0x0003, "Radio Frequency Communication Protocol (RFCOMM)")
 
 /* services */
 X(0x1800, "Generic Access")
@@ -45,7 +48,13 @@ X(0x1827, "Mesh Provisioning Service")
 X(0x1828, "Mesh Proxy Service")
 X(0x1829, "Reconnection Configuration")
 
-/* desc */
+/* declarations */
+X(0x2800, "GATT Primary Service Declaration")
+X(0x2801, "GATT Secondary Service Declaration")
+X(0x2802, "GATT Include Declaration")
+X(0x2803, "GATT Characteristic Declaration")
+
+/* descriptors */
 X(0x2900, "Characteristic Extended Properties")
 X(0x2901, "Characteristic User Description")
 X(0x2902, "Client Characteristic Configuration")
@@ -62,7 +71,7 @@ X(0x290c, "Environmental Sensing Measurement")
 X(0x290d, "Environmental Sensing Trigger Setting")
 X(0x290e, "Time Trigger Setting")
 
-/* char */
+/* characteristics */
 X(0x2a00, "Device Name")
 X(0x2a01, "Appearance")
 X(0x2a02, "Peripheral Privacy Flag")

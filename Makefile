@@ -9,6 +9,6 @@ all: $(APPNAME)
 clean:
 	$(RM) $(APPNAME)
 
-$(APPNAME): tjd.h atorch.h moyoung.h uuid_info.h
+$(APPNAME): tjd.h atorch.h moyoung.h uuid_info.h yhk_print.h
 $(APPNAME): $(APPNAME).c
 	$(CC) -s $(CFLAGS) -o $@ $< $(LIBS)
