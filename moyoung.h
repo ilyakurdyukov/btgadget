@@ -43,6 +43,20 @@ static void moyoung_init(btio_t *io) {
 
 static void moyoung_main(btio_t *io, int argc, char **argv) {
 	int ver;
+	{
+		int len, timeout_old = io->timeout;
+		io->timeout = 10;
+		len = bt_recv(io);
+		if (len) {
+			// Handle Value Notification
+			static const uint8_t data[12] = { 0x1b,0x42 }; // handle = 0x42
+			if (len != sizeof(data) || memcmp(io->buf, data, sizeof(data)))
+				ERR_EXIT("unexpected response\n");
+			if (io->verbose >= 1)
+				DBG_LOG("dummy value notification\n");
+		}
+		io->timeout = timeout_old;
+	}
 	moyoung_init(io);
 
 	{

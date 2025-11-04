@@ -208,6 +208,13 @@ loop:
 		bt_send(io, cmd, sizeof(cmd));
 		goto loop;
 	}
+#if 0
+	// Handle Value Notification
+	if (len > 3 && io->buf[0] == 0x1b) {
+		// int handle = READ16_LE(io->buf + 1);
+		goto loop;
+	}
+#endif
 	return len;
 }
 
