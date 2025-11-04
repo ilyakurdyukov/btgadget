@@ -182,6 +182,10 @@ typedef struct {
 
 static int bt_send(btio_t *io, const void *data, int len);
 
+#define BT_FILTER_NOTIFY_NONE -1
+#define BT_FILTER_NOTIFY_ALL -2
+static int bt_filter_notify = BT_FILTER_NOTIFY_NONE;
+
 static int bt_recv(btio_t *io) {
 	int ret, len;
 loop:
@@ -208,13 +212,12 @@ loop:
 		bt_send(io, cmd, sizeof(cmd));
 		goto loop;
 	}
-#if 0
 	// Handle Value Notification
-	if (len > 3 && io->buf[0] == 0x1b) {
-		// int handle = READ16_LE(io->buf + 1);
-		goto loop;
+	if (bt_filter_notify != BT_FILTER_NOTIFY_NONE &&
+			len > 3 && io->buf[0] == 0x1b) {
+		int handle = READ16_LE(io->buf + 1);
+		if (handle != bt_filter_notify) goto loop;
 	}
-#endif
 	return len;
 }
 

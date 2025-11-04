@@ -32,6 +32,7 @@ static void moyoung_init(btio_t *io) {
 	static const int uuid[] = { 0xfee2, 0xfee3 };
 	int ret, start, end;
 
+	bt_filter_notify = BT_FILTER_NOTIFY_ALL;
 	start = bt_get_type_range(io, 0xfeea, &end);
 	ret = bt_find_char(io, start, end, 2, uuid, moyoung_handle);
 	if (ret != 2) ERR_EXIT("can't find char handle\n");
@@ -39,21 +40,25 @@ static void moyoung_init(btio_t *io) {
 		DBG_LOG("write = 0x%x, read = 0x%x\n",
 				moyoung_handle[0], moyoung_handle[1]);
 	bt_write_req_desc(io, moyoung_handle[1], end);
+	bt_filter_notify = moyoung_handle[1];
 }
 
 static void moyoung_main(btio_t *io, int argc, char **argv) {
 	int ver;
-	{
+	if (0) {
 		int len, timeout_old = io->timeout;
 		io->timeout = 10;
 		len = bt_recv(io);
 		if (len) {
 			// Handle Value Notification
-			static const uint8_t data[12] = { 0x1b,0x42 }; // handle = 0x42
-			if (len != sizeof(data) || memcmp(io->buf, data, sizeof(data)))
+			static const uint8_t data[] = { 0x1b,0x42,0x00 }; // handle = 0x42
+			if (len != 12 || memcmp(io->buf, data, 3))
 				ERR_EXIT("unexpected response\n");
 			if (io->verbose >= 1)
-				DBG_LOG("dummy value notification\n");
+				DBG_LOG("activity: steps = %u, unknown = %u, calories = %u\n",
+						io->buf[3] | io->buf[3 + 1] << 8 | io->buf[3 + 2] << 16,
+						io->buf[6] | io->buf[6 + 1] << 8 | io->buf[6 + 2] << 16,
+						io->buf[9] | io->buf[9 + 1] << 8 | io->buf[9 + 2] << 16);
 		}
 		io->timeout = timeout_old;
 	}
@@ -92,6 +97,30 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 			print_esc_str(stderr, io->buf + 3 + 6, len - 6);
 			DBG_LOG("\"\n");
 			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "getlanguage")) {
+			static const uint8_t cmd[] = { 0x10,0x2b };
+			int i, n, len;
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			len = moyoung_recv(io);
+			if (len != 14 || io->buf[7] != 0x2b )
+				ERR_EXIT("unexpected response\n");
+			DBG_LOG("language = %u\n", io->buf[8]);
+			DBG_LOG("supported languages:");
+			for (i = n = 0; i < 64; i++) {
+				int a = io->buf[9 + ((i >> 3) ^ 3)];
+				if (a >> (i & 7) & 1)
+					DBG_LOG("%s %u", n++ ? "," : "", i);
+			}
+			DBG_LOG("\n");
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "setlanguage")) {
+			uint8_t cmd[] = { 0x10,0x1b,0x00 };
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			cmd[2] = strtol(argv[2], NULL, 0);
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			argc -= 2; argv += 2;
 
 		} else if (!strcmp(argv[1], "finddev")) {
 			static const uint8_t cmd[] = { 0x10,0x61 };
