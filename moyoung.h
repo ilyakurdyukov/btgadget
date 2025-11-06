@@ -122,6 +122,50 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 			moyoung_cmd(io, cmd, sizeof(cmd));
 			argc -= 2; argv += 2;
 
+		} else if (!strcmp(argv[1], "getautolock")) {
+			static const uint8_t cmd[] = { 0x10,0x8d };
+			int i, n, len;
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			len = moyoung_recv(io);
+			if (len != 7 || io->buf[7] != 0x8d )
+				ERR_EXIT("unexpected response\n");
+			DBG_LOG("lock_time = %u\n", io->buf[8]);
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "setautolock")) {
+			uint8_t cmd[] = { 0x10,0x7d,0x00 };
+			int val;
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			val = strtol(argv[2], NULL, 0);
+			val = val < 5 ? 5 : val > 30 ? 30 : val;
+			cmd[2] = val;
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "gettimeformat")) {
+			static const uint8_t cmd[] = { 0x10,0x27 };
+			int i, n, len;
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			len = moyoung_recv(io);
+			if (len != 6 || io->buf[7] != 0x27 )
+				ERR_EXIT("unexpected response\n");
+			DBG_LOG("time_format = %u\n", io->buf[8] ? 24 : 12);
+			argc -= 1; argv += 1;
+
+		} else if (!strcmp(argv[1], "settimeformat")) {
+			uint8_t cmd[] = { 0x10,0x17,0x00 };
+			int val;
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			val = strtol(argv[2], NULL, 0);
+			switch (val) {
+			case 12: val = 0; break;
+			case 24: val = 1; break;
+			default: ERR_EXIT("unknown time format\n");
+			}
+			cmd[2] = val;
+			moyoung_cmd(io, cmd, sizeof(cmd));
+			argc -= 2; argv += 2;
+
 		} else if (!strcmp(argv[1], "finddev")) {
 			static const uint8_t cmd[] = { 0x10,0x61 };
 			moyoung_cmd(io, cmd, sizeof(cmd));

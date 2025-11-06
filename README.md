@@ -42,4 +42,10 @@ Just a personal tool for experiments. May be useful as example code.
 - `info`: device info  
 - `finddev`: find device feature  
 - `timesync`: synchronize time  
+- `getlanguage`: get language  
+- `setlanguage N`: set language  
+- `getautolock`: get auto-lock time (seconds)  
+- `setautolock N`: set auto-lock time (5..30)  
+- `gettimeformat`: get time fromat  
+- `settimeformat N`: set time format (12, 24)  
 
