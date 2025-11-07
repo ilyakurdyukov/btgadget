@@ -190,7 +190,6 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 			DBG_LOG("\n");
 			argc -= 1; argv += 1;
 
-		// There is no way to delete E-Cards? Da Fit doesn't do that.
 		} else if (!strcmp(argv[1], "setecardlist")) {
 			uint8_t cmd[255 - 4];
 			int n = 0; char *s;
@@ -209,6 +208,16 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 			cmd[0] = 0xb9;
 			cmd[1] = 2; cmd[2] = 0; cmd[3] = 4;
 			moyoung_cmd(io, cmd, 4 + n);
+			argc -= 2; argv += 2;
+
+		} else if (!strcmp(argv[1], "remecard")) {
+			int idx, len, n1, n2;
+			if (argc <= 2) ERR_EXIT("bad command\n");
+			idx = strtol(argv[2], NULL, 0);
+			{
+				uint8_t cmd[] = { 0xb9,0x02,0x00,0x01, idx };
+				moyoung_cmd(io, cmd, sizeof(cmd));
+			}
 			argc -= 2; argv += 2;
 
 		} else if (!strcmp(argv[1], "getecard")) {

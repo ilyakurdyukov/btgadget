@@ -52,4 +52,5 @@ Just a personal tool for experiments. May be useful as example code.
 - `setecardlist N0,N1...`: set E-Card list (can't delete items)  
 - `getecard N`: get E-Card  
 - `setecard N name data`: set E-Card  
+- `remecard N`: remove E-Card  
 

@@ -41,7 +41,7 @@ static void print_esc_str(FILE *f, const uint8_t *buf, size_t len) {
 	size_t i; int a;
 	for (i = 0; i < len; i++) {
 		a = buf[i];
-		if (a > 0x20 && a < 0x7f) {
+		if (a >= 0x20 && a < 0x7f) {
 			if (a == '"' || a == '\\') fputc('\\', f);
 			fputc(a, f);
 		} else fprintf(f, "\\x%02x", a);
@@ -410,7 +410,7 @@ static int bt_recv_more(btio_t *io, int pos, int n) {
 		if (io->buf[0] != 0x1b) return -1;
 		if (READ16_LE(io->buf + 1) != handle) return -1;
 		len -= 3;
-		if (n - pos > len) return -1;
+		if (n - pos < len) return -1;
 		memcpy(buf + pos, io->buf + 3, len);
 	}
 	memcpy(io->buf + 3, buf, n);
