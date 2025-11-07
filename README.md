@@ -48,4 +48,8 @@ Just a personal tool for experiments. May be useful as example code.
 - `setautolock N`: set auto-lock time (5..30)  
 - `gettimeformat`: get time fromat  
 - `settimeformat N`: set time format (12, 24)  
+- `getecardlist`: get E-Card list  
+- `setecardlist N0,N1...`: set E-Card list (can't delete items)  
+- `getecard N`: get E-Card  
+- `setecard N name data`: set E-Card  
 
