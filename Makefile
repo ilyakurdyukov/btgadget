@@ -1,5 +1,5 @@
 
-CFLAGS = -O2 -Wall -Wextra -std=c99 -pedantic -Wno-unused
+CFLAGS = -O2 -Wall -Wextra -std=c99 -pedantic
 APPNAME = btgadget
 #LIBS = -lbluetooth
 

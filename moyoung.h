@@ -131,7 +131,7 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "getautolock")) {
 			static const uint8_t cmd[] = { 0x8d };
-			int i, n, len;
+			int len;
 			moyoung_cmd(io, cmd, sizeof(cmd));
 			len = moyoung_recv(io);
 			if (len != 7 || io->buf[7] != cmd[0])
@@ -152,7 +152,7 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "gettimeformat")) {
 			static const uint8_t cmd[] = { 0x27 };
-			int i, n, len;
+			int len;
 			moyoung_cmd(io, cmd, sizeof(cmd));
 			len = moyoung_recv(io);
 			if (len != 6 || io->buf[7] != cmd[0] )
@@ -211,7 +211,7 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 			argc -= 2; argv += 2;
 
 		} else if (!strcmp(argv[1], "remecard")) {
-			int idx, len, n1, n2;
+			int idx;
 			if (argc <= 2) ERR_EXIT("bad command\n");
 			idx = strtol(argv[2], NULL, 0);
 			{
@@ -247,7 +247,7 @@ static void moyoung_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "setecard")) {
 			uint8_t cmd[255 - 4];
-			int idx, len, n1, n2;
+			int idx, n1, n2;
 			const char *ecard_name, *ecard_data;
 			if (argc <= 4) ERR_EXIT("bad command\n");
 			idx = strtol(argv[2], NULL, 0);

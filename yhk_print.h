@@ -59,7 +59,7 @@ static void yhk_print_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "err")) {
 			static const uint8_t cmd[] = { 0x1d,0x67,0x53 };
-			int len; const char *s = "unknown";
+			const char *s = "unknown";
 			bt_send(io, cmd, 3);
 			if (read(io->sock, buf, 6) != 6)
 				ERR_EXIT("read failed\n");
@@ -108,7 +108,7 @@ static void yhk_print_main(btio_t *io, int argc, char **argv) {
 			static const uint8_t cmd2[] = { 0x1b,0x40 };
 			uint8_t cmd3[] = { 0x1d,0x76,0x30,0, 0,0,0,0 };
 			static const uint8_t cmd4[] = { 0x0a,0x0a,0x0a,0x0a };
-			const char *fn; unsigned y, height, st;
+			unsigned y, height, st;
 			uint8_t *image;
 			if (argc <= 2) ERR_EXIT("bad command\n");
 			image = yhk_print_read_pbm(argv[2], yhk_width, &height);

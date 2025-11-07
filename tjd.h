@@ -211,12 +211,12 @@ static void tjd_main(btio_t *io, int argc, char **argv) {
 
 		} else if (!strcmp(argv[1], "dialinfoset")) {
 			uint8_t cmd[] = { 0x2e,0x01, 0,0,0,0,0,0 };
-			int i, len;
+			int i;
 			if (argc <= 7) ERR_EXIT("bad command\n");
 			for (i = 0; i < 6; i++)
 				cmd[2 + i] = strtol(argv[2 + i], NULL, 0);
 			tjd_cmd(io, cmd, sizeof(cmd), 3);
-			len = tjd_recv(io);
+			tjd_recv(io);
 			argc -= 7; argv += 7;
 
 		} else if (!strcmp(argv[1], "setlanguage")) {
