@@ -440,7 +440,7 @@ static int list_handles_cb(void *data, const uint8_t *buf, int n) {
 		DBG_LOG("%08x-0000-1000-8000-00805f9b34fb\n",
 				READ16_LE(buf));
 	else
-		DBG_LOG("%08x-%02x-%02x-%02x-%02x%04x\n",
+		DBG_LOG("%08x-%04x-%04x-%04x-%04x%08x\n",
 				READ32_LE(buf + 12), READ16_LE(buf + 10),
 				READ16_LE(buf + 8), READ16_LE(buf + 6),
 				READ16_LE(buf + 4), READ32_LE(buf));
@@ -457,8 +457,10 @@ static int list_handles_cb(void *data, const uint8_t *buf, int n) {
 }
 
 static inline void list_handles(btio_t *io, int mode) {
+	bt_filter_notify = BT_FILTER_NOTIFY_ALL;
 	enum_handles(io, 1, 0xffff, mode,
 			&list_handles_cb, (void*)(intptr_t)(mode | io->verbose << 16));
+	bt_filter_notify = BT_FILTER_NOTIFY_NONE;
 }
 
 static int pnm_next(FILE *f) {
